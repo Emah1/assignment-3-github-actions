@@ -1,0 +1,80 @@
+name: DevOps CI Pipeline
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    name: Validate Bash Scripts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check Bash syntax
+        run: |
+          bash -n app/app.sh
+          bash -n scripts/lint.sh
+          bash -n scripts/build.sh
+          bash -n tests/test.sh
+
+      - name: Check executable permissions
+        run: |
+          test -x app/app.sh
+          test -x scripts/lint.sh
+          test -x scripts/build.sh
+          test -x tests/test.sh
+
+      - name: Run lint checks
+        run: ./scripts/lint.sh
+
+  test:
+    name: Run Application Tests
+    runs-on: ubuntu-latest
+    needs: validate
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y netcat-openbsd
+
+      - name: Run tests
+        run: ./tests/test.sh
+
+  docker:
+    name: Build and Test Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t devops-ci-app:ci .
+
+      - name: Docker help smoke test
+        run: docker run --rm devops-ci-app:ci help
+
+      - name: Docker system-info smoke test
+        run: docker run --rm devops-ci-app:ci system-info
+
+      - name: Docker invalid command test
+        run: |
+          set +e
+          docker run --rm devops-ci-app:ci invalid-command
+          rc=$?
+          set -e
+
+          if [ "$rc" -eq 2 ]; then
+            echo "Invalid command correctly returned exit code 2"
+          else
+            echo "Expected exit code 2 but received $rc"
+            exit 1
+          fi
