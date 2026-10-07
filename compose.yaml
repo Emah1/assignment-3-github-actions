@@ -1,0 +1,5 @@
+services:
+  app:
+    build: .
+    image: devops-ci-app:latest
+    entrypoint: ["/app/app.sh"]
